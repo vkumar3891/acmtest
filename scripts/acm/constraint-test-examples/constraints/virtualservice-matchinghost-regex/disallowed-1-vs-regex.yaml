@@ -1,0 +1,18 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: blocked-server-app-http
+  #namespace: server-k8s-ns
+spec:
+  gateways:
+  - istio-system/apps-internal-gateway
+  - mesh
+  hosts:
+#  - server.qaz-wrongns.apps.dev-01.us-central1.dev.sabre-gcp.com
+   - gitea-giteaserverwrongns.apps.dev-03.us-central2.dev.sabre-gcp.com
+  http:
+  - route:
+    - destination:
+        host: server-app-http.server-k8s-ns.svc.cluster.local
+        port:
+          number: 8080

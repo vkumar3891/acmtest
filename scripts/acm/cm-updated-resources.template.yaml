@@ -1,0 +1,117 @@
+# config-management.yaml
+
+apiVersion: configmanagement.gke.io/v1
+kind: ConfigManagement
+metadata:
+  name: config-management
+spec:
+#  git:
+#    syncRepo: "https://gitea-giteaserver.apps.${CLUSTER_SHORT_NAME}.${REGIONALITY}.${ENV}.${TOP_LEVEL_DOMAIN_NAME}"
+#    syncBranch: master
+#    secretType: none
+#    policyDir: "."
+  #    syncWait: "" (Default: 15 Seconds)
+  #    syncRev: "" (Default: HEAD)
+  #    sourceFormat: unstructured (Default: hierarchy)
+  # Set to true to install and enable Policy Controller
+
+  patches:
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gatekeeper-audit
+        namespace: gatekeeper-system
+      spec:
+        template:
+          spec:
+            containers:
+              - name: manager
+                args:
+                - --logtostderr
+                - --operation=audit
+                - --operation=status
+                - --log-level-key=severity
+                - --log-level-encoder=capital
+                - --enable-referential-rules
+                - --audit-interval=60
+                - --constraint-violations-limit=5000
+                resources:
+                  limits:
+                    memory: "${GATEKEEPER_AUDIT_MEMORY_LIMIT}"
+                    cpu: "${GATEKEEPER_AUDIT_CPU_LIMIT}"
+                  requests:
+                    memory: "${GATEKEEPER_AUDIT_MEMORY_REQUEST}"
+                    cpu: "${GATEKEEPER_AUDIT_CPU_REQUEST}"
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gatekeeper-controller-manager
+        namespace: gatekeeper-system
+      spec:
+        replicas: ${GATEKEEPER_CONTROLLER_REPLICAS}
+        template:
+          spec:
+            containers:
+              - env:
+                - name: GOMAXPROCS
+                  value: "${GOMAXPROCS}"
+                args:
+                  - --port=10250
+                  - --logtostderr
+                  - --cert-service-name=*
+                  - --operation=webhook
+                  - --log-level-key=severity
+                  - --log-level-encoder=capital
+                  - --enable-referential-rules
+                  - --log-denies
+                  - --max-serving-threads=${GATEKEEPER_CONTROLLER_CPU_LIMIT}
+%{ for item in POLICY_CONTROLLER_EXEMPTABLE_NAMESPACES ~}
+                  - --exempt-namespace=${item}
+%{ endfor ~}
+                name: manager
+                resources:
+                  limits:
+                    memory: "${GATEKEEPER_CONTROLLER_MEMORY_LIMIT}"
+                    cpu: "${GATEKEEPER_CONTROLLER_CPU_LIMIT}"
+                  requests:
+                    memory: "${GATEKEEPER_CONTROLLER_MEMORY_REQUEST}"
+                    cpu: "${GATEKEEPER_CONTROLLER_CPU_REQUEST}"
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: reconciler-manager
+        namespace: config-management-system
+      spec:
+        template:
+          spec:
+            containers:
+              - name: reconciler-manager
+                resources:
+                  limits:
+                    cpu: "${CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_CPU_LIMIT}"
+                    memory: "${CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_MEMORY_LIMIT}"
+                  requests:
+                    cpu: "${CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_CPU_REQUEST}"
+                    memory: "${CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_MEMORY_REQUEST}"
+
+  policyController:
+    #enabled: true
+    enabled: ${POLICY_CONTROLLER_ENABLED}
+    # Uncomment to prevent the template library from being installed
+    # templateLibraryInstalled: false
+    # Uncomment to enable support for referential constraints
+    referentialRulesEnabled: true
+    # Uncomment to disable audit, adjust value to set audit interval
+    # auditIntervalSeconds: 0
+    # Uncomment to log all denies and dryrun failures
+    logDeniesEnabled: true
+    exemptableNamespaces:
+      # TODO get this dynamically
+      # - external-dns-6axw
+%{ for item in POLICY_CONTROLLER_EXEMPTABLE_NAMESPACES ~}
+      - ${item}
+%{ endfor ~}
+    monitoring:
+      backends:
+      - cloudmonitoring
+      - prometheus

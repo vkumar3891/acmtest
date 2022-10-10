@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: allowed-server-app-http-test
+  namespace: test
+spec:
+  gateways:
+  - istio-system/apps-internal-gateway
+  - mesh
+  hosts:
+  - server-app.server-k8s-test.apps.tf-ci-03.us-central1.dev.tf-ci-sabre-gcp.com
+  http:
+  - route:
+    - destination:
+        host: server-app-http.test.svc.cluster.local
+        port:
+          number: 8080

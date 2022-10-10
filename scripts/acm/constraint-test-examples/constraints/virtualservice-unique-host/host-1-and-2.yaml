@@ -1,0 +1,18 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: host-1-and-2
+  #namespace: test
+spec:
+  gateways:
+  - istio-system/apps-internal-gateway
+  - mesh
+  hosts:
+  - app-01.us-central1.dev.sabre-gcp.com
+  - app-02.us-central1.dev.sabre-gcp.com
+  http:
+  - route:
+    - destination:
+        host: server-app-http.server-k8s-ns.svc.cluster.local
+        port:
+          number: 8080

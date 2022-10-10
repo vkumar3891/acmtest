@@ -1,0 +1,11 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: pdbdemo-maxunavail
+  namespace: test
+  #namespace: pdbdemo-maxunavail
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      run: nginx

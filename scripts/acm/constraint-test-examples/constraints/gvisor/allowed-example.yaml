@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd-gvisor
+  labels:
+    app: httpd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpd
+  template:
+    metadata:
+      labels:
+        app: httpd
+    spec:
+      securityContext:
+        runAsUser: 0
+      runtimeClassName: gvisor
+      containers:
+        - name: httpd
+          image: httpd
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test
+spec:
+  runtimeClassName: gvisor
+  containers:
+    - name: httpd-pod
+      securityContext:
+        runAsUser: 0
+      image: httpd
+      resources:
+        limits:
+          cpu: 1
+          memory: 0.5Gi
+        requests:
+          cpu: 300m
+          memory: 128Mi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-sts
+spec:
+  serviceName: "nginx"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      runtimeClassName: gvisor
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: nginx
+          image: k8s.gcr.io/nginx-slim:0.8
+          ports:
+            - containerPort: 80
+              name: web
+          volumeMounts:
+            - name: www
+              mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+    - metadata:
+        name: www
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi
+spec:
+  template:
+    spec:
+      runtimeClassName: gvisor
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: pi
+          image: perl
+          command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+      restartPolicy: Never
+  backoffLimit: 4

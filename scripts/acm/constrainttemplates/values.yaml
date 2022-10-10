@@ -1,0 +1,19 @@
+clusterName: <>
+internalDnsSuffix: <>
+constrainttemplates_name:
+  k8s_restrict_load_balancer: k8srestrictloadbalancer
+  k8s_allowed_role_binding_subjects: k8sallowedrolebindingsubjects
+  k8s_virtual_service_gateway_host_match_regex: k8svirtualservicegatewayhostmatchregex
+  k8s_virtual_service_unique_host_match: k8svirtualserviceuniquehostmatch
+  pdb_max_unavailable: pdbmaxunavailable
+  pdb_no_selector: pdbnoselector
+  k8s_debug: k8sdebug
+  k8s_psp_hostname_space: k8spsphostnamespace
+  k8s_psp_host_networking_ports: k8spsphostnetworkingports
+  k8s_psp_privileged_container: k8spspprivilegedcontainer
+  k8s_psp_capabilities: k8spspcapabilities
+  k8s_psp_fsgroup: k8spspfsgroup
+  k8s_psp_volume_types: k8spspvolumetypes
+  k8s_restrict_gvisor: k8srestrictgvisor
+  k8s_no_external_service: k8snoexternalservices
+  scf_group_enforcement: scfgroupenforcement

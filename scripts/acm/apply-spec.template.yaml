@@ -1,0 +1,41 @@
+# apply-spec.yaml
+
+applySpecVersion: 1
+spec:
+  hierarchyController:
+    enabled: false
+  configSync:
+    # Set to true to install and enable Config Sync
+    enabled: false
+    #sourceFormat: FORMAT
+    #syncRepo: "https://gitea-giteaserver.apps.${CLUSTER_SHORT_NAME}.${REGIONALITY}.${ENV}.${TOP_LEVEL_DOMAIN_NAME}"
+    #syncBranch: master
+    #secretType: none
+    #gcpServiceAccountEmail: EMAIL
+    #policyDir: "."
+  policyController:
+    # Set to true to install and enable Policy Controller
+    #enabled: true
+    enabled: ${POLICY_CONTROLLER_ENABLED}
+    # Uncomment to prevent the template library from being installed
+    # templateLibraryInstalled: false
+    # Uncomment to enable support for referential constraints
+    referentialRulesEnabled: true
+    # Uncomment to disable audit, adjust value to set audit interval
+    # auditIntervalSeconds: 0
+    # Uncomment to log all denies and dryrun failures
+    logDeniesEnabled: true
+    exemptableNamespaces:
+      # TODO get this dynamically
+      # - external-dns-6axw
+%{ for item in POLICY_CONTROLLER_EXEMPTABLE_NAMESPACES ~}
+      - ${item}
+%{ endfor ~}
+    monitoring:
+      backends:
+      - cloudmonitoring
+      - prometheus
+    # Uncomment to enable mutation (preview feature)
+    # mutation:
+    #   # enabled: true
+  # ...other fields...

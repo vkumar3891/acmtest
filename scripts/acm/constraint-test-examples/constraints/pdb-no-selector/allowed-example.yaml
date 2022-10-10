@@ -1,0 +1,10 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: pdbdemo-1
+  #namespace: test
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      run: nginx

@@ -1,0 +1,21 @@
+apiVersion: configsync.gke.io/v1beta1
+kind: RootSync
+metadata:
+  name: root-sync
+  namespace: config-management-system
+spec:
+  override:
+    resources:
+      - containerName: "reconciler"
+        cpuLimit: "${RECONCILER_CPU_LIMIT}"
+        memoryLimit: "${RECONCILER_MEMORY_LIMIT}"
+      - containerName: "git-sync"
+        memoryLimit: "${GIT_SYNC_MEMORY_LIMIT}"
+        cpuLimit: "${GIT_SYNC_CPU_LIMIT}"
+  git:
+    auth: none
+    branch: master
+    dir: "."
+    noSSLVerify: true
+    repo: "https://gitea-giteaserver.apps.${CLUSTER_SHORT_NAME}.${REGIONALITY}.${ENV}.${TOP_LEVEL_DOMAIN_NAME}"
+    secretRef: {}

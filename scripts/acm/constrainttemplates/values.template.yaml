@@ -1,0 +1,11 @@
+clusterName: <>
+internalDnsSuffix: <dns>
+constrainttemplates_name:
+%{ for ct_pair in split(",", CONSTRAINTTEMPLATES_DICT) ~}
+  ${ct_pair}
+%{ endfor ~}
+
+policy_controller_exemptable_namespaces:
+  %{ for ns in PC_EXEMPTABLE_NS ~}
+- ${ns}
+  %{ endfor ~}

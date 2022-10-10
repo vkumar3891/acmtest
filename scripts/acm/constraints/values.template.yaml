@@ -1,0 +1,11 @@
+clusterName: <>
+internalDnsSuffix: <>
+exempted_lbs_namespaces:
+  %{ for ns in EXEMPT_LBS_NAMESPACES ~}
+- ${ns}
+  %{ endfor ~}
+
+extlb_namespaces:
+  %{ for ns in EXTLB_NAMESPACES ~}
+- ${ns}
+  %{ endfor ~}

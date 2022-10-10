@@ -1,0 +1,133 @@
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRestrictLoadBalancer
+metadata:
+  name: restrictservicetype-loadbalancer
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Service"]
+    excludedNamespaces:
+      {{- range $ns := .Values.exempted_lbs_namespaces }}
+      - {{ $ns }}
+      {{- end }}
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRoleBindingSubjects
+metadata:
+  name: allowedrestrictrolebindingssubjects
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["*"]
+        kinds: ["RoleBinding"]
+  parameters:
+    allowedSubjects:
+     - kind: ServiceAccount
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sVirtualServiceGatewayHostMatchRegex
+metadata:
+  name: internal-gateway-must-match-regex
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["*"]
+        kinds: ["VirtualService"]
+  parameters:
+    controlledGateway: "istio-system/apps-internal-gateway"
+    matchingHostSuffix: "{{ .Values.internalDnsSuffix }}"
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sVirtualServiceUniqueHostMatch
+metadata:
+  name: virtualserviceuniquehost
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["*"]
+        kinds: ["VirtualService"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: PdbMaxUnavailable
+metadata:
+  name: pdb-maxunavailable
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+       - apiGroups: ["*"]
+         kinds: ["PodDisruptionBudget"]
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: PdbNoSelector
+metadata:
+  name: pdb-noselector
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["*"]
+        kinds: ["PodDisruptionBudget"]
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRestrictGvisor
+metadata:
+  name: restrict-gvisor
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: ["*"]
+        kinds: ["Pod", "Deployment", "Job", "StatefulSet", "DaemonSet"]
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoExternalServices
+metadata:
+  name: lb-type-internal
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    excludedNamespaces:
+      {{- range $ns := .Values.extlb_namespaces }}
+      - {{ $ns }}
+      {{- end }}
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: SCFGroupEnforcement
+metadata:
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+  name: cc-group-enforcement
+spec:
+  enforcementAction: deny
+  match:
+    kinds: ""
+    excludedNamespaces:
+      - <ns-name>
+  parameters:
+    whitelist_groups:
+      - system:serviceaccounts:<>-system

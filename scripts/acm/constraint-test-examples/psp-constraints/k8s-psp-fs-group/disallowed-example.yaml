@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fsgroup-disallowed
+  labels:
+    app: nginx-users
+spec:
+  securityContext:
+    fsGroup: 250
+  containers:
+    - name: nginx
+      image: nginx
+      securityContext:
+        capabilities:
+          drop: ["KILL", "MKNOD", "SYS_CHROOT"]

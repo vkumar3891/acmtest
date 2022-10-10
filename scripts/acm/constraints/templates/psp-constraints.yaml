@@ -1,0 +1,104 @@
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPHostNamespace
+metadata:
+  name: psp-host-namespace
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPHostNetworkingPorts
+metadata:
+  name: psp-host-network-ports
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+  parameters:
+    hostNetwork: false
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPPrivilegedContainer
+metadata:
+  name: psp-privileged-container
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPCapabilities
+metadata:
+  name: psp-capabilities
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+  parameters:
+    requiredDropCapabilities: ["KILL","MKNOD","SYS_CHROOT"]
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPFSGroup
+metadata:
+  name: k8spspfsgroup
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+  parameters:
+    rule: "MustRunAs"
+    ranges:
+      - max: 100
+        min: 3000
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPVolumeTypes
+metadata:
+  name: psp-volume-types
+  labels:
+    {{- include "constraints.labels" . | nindent 4 }}
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+  parameters:
+    volumes:
+    # - "*" # * may be used to allow all volume types
+      - configMap
+      - emptyDir
+      - persistentVolumeClaim
+      - secret
+#      - downwardAPI
+#      - nfs
+#      - projected
+#    #- hostPath #required for allowedHostPaths
+#    - flexVolume #required for allowedFlexVolumes

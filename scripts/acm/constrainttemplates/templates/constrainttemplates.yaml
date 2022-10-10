@@ -1,0 +1,407 @@
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.k8s_debug }}
+  annotations:
+    description: Always firing printing review object. Helps in development.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDebug
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdebug
+
+        violation[{"msg": msg}] {
+          true
+          # msg := sprintf("REVIEW OBJECT: %v\nDATA OBJECT: %v\n", [input.review, data.inventory])
+          msg := sprintf("REVIEW OBJECT: %v", [input.review])
+        }
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.k8s_restrict_load_balancer }}
+  annotations:
+    description: Disallows to create Service with type LoadBalancer.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRestrictLoadBalancer
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srestrictloadbalancer
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "Service"
+          input.review.object.spec.type == "LoadBalancer"
+          msg := "User is not allowed to create service of type LoadBalancer"
+        }
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  annotations:
+    description: Allows RoleBindings or ClusterRoleBindings with subjects matching any `allowedSubjects` passed as parameters.
+  name: {{ .Values.constrainttemplates_name.k8s_allowed_role_binding_subjects }}
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRoleBindingSubjects
+      validation:
+        openAPIV3Schema:
+          properties:
+            allowedSubjects:
+              items:
+                properties:
+                  kind:
+                    type: string
+#                  namespace:
+#                    type: string
+                type: object
+              type: array
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+
+    rego: |
+      package k8sallowedrolebindingsubjects
+
+      is_rolebinding_or_cluster_rolebinding(kind) {
+        kind.group == "rbac.authorization.k8s.io"
+        kinds := {"RoleBinding"}
+        kinds[kind.kind]
+      }
+
+      violation[{"msg": msg}] {
+        is_rolebinding_or_cluster_rolebinding(input.review.kind)
+        allowedSubject := input.parameters.allowedSubjects[_]
+        inputSubject := input.review.object.subjects[_]
+        not allowedSubject.kind == inputSubject.kind
+        msg := sprintf("<%v> has disallowed kind <%v>, and name <%v>", [input.review.object.metadata.name, inputSubject.kind, inputSubject.name])
+      }
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.k8s_virtual_service_gateway_host_match_regex }}
+  annotations:
+    description: virtualservice creation with a controlled gateway with matched host pattern
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sVirtualServiceGatewayHostMatchRegex
+      validation:
+        openAPIV3Schema:
+          properties:
+            controlledGateway:
+              type: string
+            matchingHostSuffix:
+              type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8svirtualservicegatewayhostmatchregex
+
+        object = input.review.object
+        name = object.metadata.name
+        namespace = object.metadata.namespace
+        pattern = sprintf(".*-%v\\.%v", [namespace, input.parameters.matchingHostSuffix])
+        gateways := {x | x := object.spec.gateways[_]}
+        hosts := {x | x := object.spec.hosts[_]}
+
+        is_controlled_gateway {
+          gateways[input.parameters.controlledGateway]
+        }
+
+        violation[{"msg": msg}] {
+          is_controlled_gateway
+          hostnameMatch := [hostname | host := hosts[_]
+                          re_match(pattern, host)
+                          hostname := host]
+          count(hostnameMatch) == 0
+          msg := sprintf("Controlled gateway %v needs matching required pattern %v in list of hosts %v", [input.parameters.controlledGateway, pattern, hosts])
+        }
+
+---
+
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.k8s_virtual_service_unique_host_match }}
+  annotations:
+    description: virtualservice creation with a unique host on samenamespace.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sVirtualServiceUniqueHostMatch
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8svirtualserviceuniquehostmatch
+
+        identical(obj, review) {
+            obj.metadata.namespace == review.object.metadata.namespace
+            obj.metadata.name == review.object.metadata.name
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "VirtualService"
+          re_match("^(networking.istio.io)$", input.review.kind.group)
+          hosts := {x | x := input.review.object.spec.hosts[_]}
+
+          other = data.inventory.namespace[ns][otherapiversion].VirtualService[otherName]
+          re_match("^(networking.istio.io)/.+$", otherapiversion)
+          otherHosts := {x | x := other.spec.hosts[_]}
+
+          overlappingHosts := hosts & otherHosts
+          overlappingHostsCount := count(overlappingHosts)
+          overlappingHostsCount != 0
+
+          not identical(other, input.review)
+          msg :=  sprintf("VirtualService host(s) %v conflict with VirtualService: %v [%v] on these host(s)- %v", [hosts, otherName, otherHosts, overlappingHosts])
+        }
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.pdb_max_unavailable }}
+  annotations:
+    description: Disallowed PodDisruptionBudget Spec.maxUnavailble value.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: PdbMaxUnavailable
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+
+      rego: |
+        package pdbmaxunavailable
+
+        # has_field returns whether an object has a field
+        has_field(object, field) = true {
+          object[field]
+        }
+
+        # object_empty returns whether object has any field
+        object_empty(object) = true {
+          object_fields_set := {field | object[field]}
+          count(object_fields_set) == 0
+        }
+
+        violates(spec) = true {
+          not has_field(spec, "maxUnavailable")
+        }
+
+        violates(spec) = true {
+          not is_object(spec.maxUnavailable)
+        }
+
+        violates(spec) = true {
+          object_empty(spec.maxUnavailable)
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          input.review.object.spec.maxUnavailable <= 0
+          msg := sprintf("PDB %v has to have spec.maxUnavailble value greater than 0", [input.review.object.metadata.name])
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          spec := input.review.object.spec
+          violates(spec)
+          msg := sprintf( "PDB %v has to have spec.maxUnavailable", [input.review.object.metadata.name])
+        }
+
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.pdb_no_selector }}
+  annotations:
+    description: Disallowed PodDisruptionBudget Spec.selector.matchlabels.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: PdbNoSelector
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package pdbnoselector
+
+        # has_field returns whether an object has a field
+        has_field(object, field) = true {
+          object[field]
+        }
+
+        # object_empty returns whether object has any field
+        object_empty(object) = true {
+          object_fields_set := {field | object[field]}
+          count(object_fields_set) == 0
+        }
+
+        violates(spec) = true {
+          not has_field(spec, "selector")
+        }
+
+        violates(spec) = true {
+          not has_field(spec.selector, "matchLabels")
+        }
+
+        violates(spec) = true {
+          not is_object(spec.selector.matchLabels)
+        }
+
+        violates(spec) = true {
+          object_empty(spec.selector.matchLabels)
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          spec := input.review.object.spec
+          violates(spec)
+          msg := sprintf("PDB %v has to have selector with matchLabels", [input.review.object.metadata.name])
+        }
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.k8s_restrict_gvisor }}
+  annotations:
+    description: Disallowed PodDisruptionBudget Spec.selector.matchlabels.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRestrictGvisor
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srestrictgvisor
+
+        violates(spec) = true {
+          not spec.runtimeClassName
+        }
+
+        violates(spec) = true {
+          spec.runtimeClassName != "gvisor"
+        }
+
+        root_container(c) = true {
+          to_number(c.securityContext.runAsUser) == 0
+        }
+
+        root_pod(spec) = true {
+          to_number(spec.securityContext.runAsUser) == 0
+        }
+
+        input_containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+
+        input_containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+
+        violation[{"msg": msg}] {
+          c = input_containers[_]
+          root_container(c)
+          violates(input.review.object.spec)
+          msg := sprintf("Running the container %v as root is not allowed: securityContext: %v.", [c.name, c.securityContext])
+        }
+
+        violation[{"msg": msg}] {
+          spec = input.review.object.spec
+          root_pod(spec)
+          violates(spec)
+          msg := sprintf("Running the pod %v as root is not allowed: securityContext: %v.", [input.review.object.metadata.name, spec.securityContext])
+        }
+
+        input_deployment_containers[c] {
+          c := input.review.object.spec.template.spec.containers[_]
+        }
+
+        input_deployment_containers[c] {
+          c := input.review.object.spec.template.spec.initContainers[_]
+        }
+
+        violation[{"msg": msg}] {
+          c = input_deployment_containers[_]
+          root_container(c)
+          violates(input.review.object.spec.template.spec)
+          msg := sprintf("Running the container %v as root  in the deployment %v is not allowed: securityContext: %v.", [c.name, input.review.object.metadata.name, c.securityContext])
+        }
+
+        violation[{"msg": msg}] {
+          spec = input.review.object.spec.template.spec
+          root_pod(spec)
+          violates(spec)
+          msg := sprintf("Running containers as root in the deployment %v is not allowed: securityContext: %v.", [input.review.object.metadata.name, spec.securityContext])
+        }
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: {{ .Values.constrainttemplates_name.scf_group_enforcement }}
+  annotations:
+    description: Block direct access to specific apiGroups, Kinds.
+  labels:
+    {{- include "constrainttemplates.labels" . | nindent 4 }}
+spec:
+  crd:
+    spec:
+      names:
+        kind: SCFGroupEnforcement
+      validation:
+        openAPIV3Schema:
+          properties:
+            whitelist_groups:
+              type: array
+              items:
+                type: string
+        legacySchema: true
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package scfgroupenforcement
+
+        violation[{"msg": msg, "details": {}}] {
+          userInfo := input.review.userInfo
+          not is_whitelist_group(userInfo)
+
+          msg := sprintf("Direct management of %v is not allowed. Sorry %v", [input.review.requestKind, userInfo.username])
+        }
+
+        is_whitelist_group(userInfo) {
+            groups := {item | item := userInfo.groups[_]}
+            allowed_groups := {item | item := input.parameters.whitelist_groups[_]}
+            count(groups & allowed_groups) > 0
+        }

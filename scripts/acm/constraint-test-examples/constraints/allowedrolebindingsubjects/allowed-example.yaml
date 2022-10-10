@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-test-serviceaccount-rolebinding-2
+  namespace: test
+subjects:
+- kind: ServiceAccount
+  name: test-sa
+  #namespace: test
+#  name: vasanth-test
+#  apiGroup: ""
+#  namespace: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,22 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: pdbdemo-maxunavail-disallowed-with-o-value
+  #namespace: test
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      run: nginx
+
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: pdbdemo-maxunavail-disallowed-nomaxunavailable-parameter
+  #namespace: test
+spec:
+#  maxUnavailable:
+  selector:
+    matchLabels:
+      run: nginx
