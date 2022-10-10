@@ -1,0 +1,191 @@
+# Commented section related to the ConfigSync installation
+//resource "kubernetes_namespace" "gitea_namespace" {
+//  metadata {
+//    name = var.gitea_namespace
+//  }
+//}
+//
+//resource "local_file" "helm_ignore" {
+//  content  = templatefile("${path.module}/scripts/acm/helmignore/helmignore.tpl", {})
+//  filename = "${path.module}/scripts/acm/gitea/.helmignore"
+//}
+//
+//resource "helm_release" "gitea-installations" {
+//  name  = "gitea"
+//  chart = "${path.module}/scripts/acm/gitea"
+//
+//  namespace        = var.gitea_namespace
+//  create_namespace = false
+//
+//  values = [
+//    templatefile("${path.module}/scripts/acm/gitea/values.template.yaml", {
+//      CLUSTER_SHORT_NAME    = var.cluster_short_name,
+//      REGIONALITY           = var.regionality,
+//      ENV                   = local.dnszone_identifier,
+//      TOP_LEVEL_DOMAIN_NAME = var.top_level_domain_name,
+//      }
+//    )
+//  ]
+//  depends_on = [kubernetes_namespace.gitea_namespace,
+//  local_file.helm_ignore]
+//}
+
+//resource "google_service_account" "configsync-sa" {
+//  account_id   = "${var.cluster_name}-config-sync-sa"
+//  display_name = "Service Account which is used by ConfigSync workflow in GKE ${var.cluster_name}"
+//}
+//
+//resource "google_project_iam_member" "configsync-sa-source-reader" {
+//  role   = "roles/source.reader"
+//  member = "serviceAccount:${google_service_account.configsync-sa.email}"
+//}
+//
+//resource "google_service_account_iam_member" "configsync-sa-source-reader-workflowidentity" {
+//  service_account_id = google_service_account.configsync-sa.name
+//  role               = "roles/iam.workloadIdentityUser"
+//  member             = format("serviceAccount:%s.svc.id.goog[%s/%s]", var.project_id, "config-management-system", "importer")
+//}
+
+resource "local_file" "acm-config-sync" {
+  content = templatefile("${path.module}/scripts/acm/apply-spec.template.yaml", {
+    CLUSTER_SHORT_NAME                      = var.cluster_short_name,
+    REGIONALITY                             = var.regionality,
+    ENV                                     = local.dnszone_identifier,
+    TOP_LEVEL_DOMAIN_NAME                   = var.top_level_domain_name,
+    POLICY_CONTROLLER_ENABLED               = true,
+    POLICY_CONTROLLER_EXEMPTABLE_NAMESPACES = local.policy_controller_exemptable_namespaces
+    }
+  )
+  filename = "/tmp/acm-config-sync.yaml"
+}
+
+resource "local_file" "cm-updated-resources" {
+  content = templatefile("${path.module}/scripts/acm/cm-updated-resources.template.yaml", {
+    CLUSTER_SHORT_NAME                                         = var.cluster_short_name,
+    REGIONALITY                                                = var.regionality,
+    ENV                                                        = local.dnszone_identifier,
+    TOP_LEVEL_DOMAIN_NAME                                      = var.top_level_domain_name,
+    POLICY_CONTROLLER_ENABLED                                  = true,
+    GATEKEEPER_CONTROLLER_MEMORY_LIMIT                         = local.gatekeeper_controller_memory_limit,
+    GATEKEEPER_CONTROLLER_CPU_LIMIT                            = local.gatekeeper_controller_cpu_limit,
+    GATEKEEPER_CONTROLLER_MEMORY_REQUEST                       = local.gatekeeper_controller_memory_request,
+    GATEKEEPER_CONTROLLER_CPU_REQUEST                          = local.gatekeeper_controller_cpu_request,
+    GATEKEEPER_AUDIT_MEMORY_LIMIT                              = local.gatekeeper_audit_memory_limit,
+    GATEKEEPER_AUDIT_CPU_LIMIT                                 = local.gatekeeper_audit_cpu_limit,
+    GATEKEEPER_AUDIT_MEMORY_REQUEST                            = local.gatekeeper_audit_memory_request,
+    GATEKEEPER_AUDIT_CPU_REQUEST                               = local.gatekeeper_audit_cpu_request,
+    CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_MEMORY_LIMIT   = local.config_management_system_reconciler_manager_memory_limit,
+    CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_CPU_LIMIT      = local.config_management_system_reconciler_manager_cpu_limit,
+    CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_MEMORY_REQUEST = local.config_management_system_reconciler_manager_memory_request,
+    CONFIG_MANAGEMENT_SYSTEM_RECONCILER_MANAGER_CPU_REQUEST    = local.config_management_system_reconciler_manager_cpu_request,
+    GATEKEEPER_CONTROLLER_REPLICAS                             = local.gatekeeper_controller_replicas,
+    GOMAXPROCS                                                 = local.gomaxprocs,
+    POLICY_CONTROLLER_EXEMPTABLE_NAMESPACES                    = local.policy_controller_exemptable_namespaces
+    }
+  )
+  filename = "/tmp/cm-updated-resources.yaml"
+}
+
+resource "local_file" "gatekeeper-monitoring" {
+  content = templatefile("${path.module}/scripts/acm/gatekeeper-monitoring.yaml", {
+    }
+  )
+  filename = "/tmp/gatekeeper-monitoring.yaml"
+}
+
+
+# When ConfigSync is installed
+//resource "local_file" "root-sync" {
+//  content = templatefile("${path.module}/scripts/acm/root-sync.template.yaml", {
+//    CLUSTER_SHORT_NAME      = var.cluster_short_name,
+//    REGIONALITY             = var.regionality,
+//    ENV                     = local.dnszone_identifier,
+//    TOP_LEVEL_DOMAIN_NAME   = var.top_level_domain_name,
+//    RECONCILER_CPU_LIMIT    = local.reconciler_cpu_limit,
+//    RECONCILER_MEMORY_LIMIT = local.reconciler_memory_limit,
+//    GIT_SYNC_MEMORY_LIMIT   = local.git_sync_memory_limit,
+//    GIT_SYNC_CPU_LIMIT      = local.git_sync_cpu_limit
+//    }
+//  )
+//  filename = "/tmp/root-sync.yaml"
+//}
+
+resource "null_resource" "acm-install" {
+  triggers = {
+    always_run = timestamp()
+  }
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/acm/acm.sh ${local.gke_hub_membership_name} ${var.project_id} ${local.gatekeeper_controller_memory_limit} ${local.gatekeeper_controller_cpu_limit} ${local.gatekeeper_controller_memory_request} ${local.gatekeeper_controller_cpu_request} ${local.gatekeeper_controller_replicas} ${local.gatekeeper_audit_cpu_limit} ${local.gatekeeper_audit_memory_limit} ${local.gatekeeper_audit_cpu_request} ${local.gatekeeper_audit_memory_request}"
+  }
+
+  depends_on = [
+    local_file.acm-config-sync,
+    local_file.cm-updated-resources,
+    local_file.gatekeeper-monitoring,
+    null_resource.asm,
+    //    google_service_account_iam_member.configsync-sa-source-reader-workflowidentity,
+    //    local_file.root-sync,
+    //    helm_release.gitea-installations,
+    google_project_service.anthos-api
+  ]
+}
+
+resource "helm_release" "policy-controller-constrainttemplates" {
+  name  = "constrainttemplates"
+  chart = "${path.module}/scripts/acm/constrainttemplates"
+
+  namespace        = "gatekeeper-system"
+  create_namespace = false
+  force_update     = true
+
+  values = [
+    templatefile("${path.module}/scripts/acm/constrainttemplates/values.template.yaml", {
+      CLUSTER_SHORT_NAME       = var.cluster_short_name,
+      REGIONALITY              = var.regionality,
+      ENV                      = local.dnszone_identifier,
+      TOP_LEVEL_DOMAIN_NAME    = var.top_level_domain_name,
+      CONSTRAINTTEMPLATES_DICT = var.constrainttemplates_dict,
+      PC_EXEMPTABLE_NS         = local.policy_controller_exemptable_namespaces
+      }
+    )
+  ]
+
+  depends_on = [null_resource.acm-install]
+}
+
+resource "null_resource" "check_constrainttemplates_installation_status" {
+  triggers = {
+    always_run = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/acm/wait_for_constrainttemplates.sh /tmp/anthos-kubeconfig \"${var.constrainttemplates_dict}\""
+  }
+  depends_on = [local_file.kubeconfig, helm_release.policy-controller-constrainttemplates, null_resource.tools, null_resource.acm-install]
+}
+
+
+# helm disallows deploying CRDs and CR in the same helm chart
+# see: https://helm.sh/docs/chart_best_practices/custom_resource_definitions/
+resource "helm_release" "policy-controller-constraints" {
+  name  = "constraints"
+  chart = "${path.module}/scripts/acm/constraints"
+
+  namespace        = "gatekeeper-system"
+  create_namespace = false
+  force_update     = true
+
+  values = [
+    templatefile("${path.module}/scripts/acm/constraints/values.template.yaml", {
+      CLUSTER_SHORT_NAME    = var.cluster_short_name,
+      REGIONALITY           = var.regionality,
+      ENV                   = local.dnszone_identifier,
+      TOP_LEVEL_DOMAIN_NAME = var.top_level_domain_name,
+      EXEMPT_LBS_NAMESPACES = local.env_exempted_lb_ns_identifier
+      EXTLB_NAMESPACES      = local.env_extlb_namespaces_identifier
+      }
+    )
+  ]
+
+  depends_on = [helm_release.policy-controller-constrainttemplates, null_resource.check_constrainttemplates_installation_status]
+}
